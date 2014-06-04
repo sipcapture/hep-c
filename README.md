@@ -1,7 +1,7 @@
 HEP
 ===
 
-HEP/EEP Encapsulation Protocol
+<b>HEP/EEP Encapsulation Protocol</b>
 
 EEP/HEP: Extensible Encapsulation protocol (“EEP” pronounced “HEPPY”) provides a method to duplicate an IP
 datagram to a collector by encapsulating the original datagram and its relative header properties 
