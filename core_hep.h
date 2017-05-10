@@ -27,8 +27,6 @@
 
 #define USE_IPV6
 
-#include "../../config.h"
-#include "../../src/xmlread.h"
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
@@ -71,7 +69,6 @@ SSL_CTX *ctx;
 SSL_CTX* initCTX(void);
 #endif /* USE_SSL */
 
-int load_module(xml_node *config);
 void handler(int value);
 
 int send_hepv3 (rc_info_t *rcinfo, unsigned char *data, unsigned int len, unsigned int sendzip);
