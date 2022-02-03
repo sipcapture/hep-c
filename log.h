@@ -29,24 +29,16 @@
 
 #include <syslog.h>
 
-void init_log(char *_prgname, int _use_syslog);
-
-void set_log_level(int level);
-
-void destroy_log(void);
-
-void data_log(int priority, const char * fmt, ...);
-
 #define PA_GCC_PRINTF_ATTR(a,b) __attribute__ ((format (printf, a, b)));
 
-#define LEMERG(fmt, args...) data_log(LOG_EMERG, "[DEBUG] %s:%d " fmt, __FILE__, __LINE__, ## args)
-#define LALERT(fmt, args...) data_log(LOG_ALERT, "[ALERT] %s:%d " fmt, __FILE__, __LINE__, ## args)
-#define LCRIT(fmt, args...) data_log(LOG_CRIT, "[CRIT] %s:%d " fmt, __FILE__, __LINE__, ## args)
-#define LERR(fmt, args...) data_log(LOG_ERR, "[ERR] %s:%d " fmt, __FILE__, __LINE__, ## args)
-#define LWARNING(fmt, args...) data_log(LOG_WARNING, "[WARNING] %s:%d " fmt, __FILE__, __LINE__, ## args)
-#define LNOTICE(fmt, args...) data_log(LOG_NOTICE, "[NOTICE] " fmt, ## args)
-#define LINFO(fmt, args...) data_log(LOG_INFO, "[INFO] %s:%d " fmt, __FILE__, __LINE__, ## args)
-#define LDEBUG(fmt, args...) data_log(LOG_DEBUG, "[DEBUG] %s:%d " fmt, __FILE__, __LINE__, ## args)
-#define LMESSAGE(fmt, args...) data_log(LOG_ERR, "[MESSAGE] " fmt, ## args)
+#define LEMERG(fmt, args...) syslog(LOG_EMERG, "[DEBUG] %s:%d " fmt, __FILE__, __LINE__, ## args)
+#define LALERT(fmt, args...) syslog(LOG_ALERT, "[ALERT] %s:%d " fmt, __FILE__, __LINE__, ## args)
+#define LCRIT(fmt, args...) syslog(LOG_CRIT, "[CRIT] %s:%d " fmt, __FILE__, __LINE__, ## args)
+#define LERR(fmt, args...) syslog(LOG_ERR, "[ERR] %s:%d " fmt, __FILE__, __LINE__, ## args)
+#define LWARNING(fmt, args...) syslog(LOG_WARNING, "[WARNING] %s:%d " fmt, __FILE__, __LINE__, ## args)
+#define LNOTICE(fmt, args...) syslog(LOG_NOTICE, "[NOTICE] " fmt, ## args)
+#define LINFO(fmt, args...) syslog(LOG_INFO, "[INFO] %s:%d " fmt, __FILE__, __LINE__, ## args)
+#define LDEBUG(fmt, args...) syslog(LOG_DEBUG, "[DEBUG] %s:%d " fmt, __FILE__, __LINE__, ## args)
+#define LMESSAGE(fmt, args...) syslog(LOG_ERR, "[MESSAGE] " fmt, ## args)
 
 #endif /* LOG_H_ */
