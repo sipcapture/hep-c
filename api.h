@@ -41,8 +41,6 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-#include "config.h"
-
 #ifdef __GNUC__
 /* GNU C */
 #define PACK_OFF __attribute__ ((__packed__));

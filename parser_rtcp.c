@@ -23,7 +23,7 @@
  *
  */
 #include <stdio.h>
-#include <captagent/log.h>
+#include "log.h"
 #include "parser_rtcp.h"
 
 
