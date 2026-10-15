@@ -14,6 +14,8 @@ typedef struct hep_io_hooks {
 	int (*send)(void *user_data, const void *buffer, unsigned int length);
 	/* Optional: called after repeated send failures (reconnect). */
 	int (*reconnect)(void *user_data);
+	/* Required when hep_configure() sets auth_key and this hook performs send(). */
+	unsigned int transport_encrypted;
 } hep_io_hooks_t;
 
 void hep_set_io_hooks(const hep_io_hooks_t *hooks, void *user_data);
