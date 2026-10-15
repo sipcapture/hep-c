@@ -6,7 +6,8 @@ libhep_la_SOURCES = \
 	src/hep_log.c \
 	src/hep_io.c \
 	src/hep_config.c \
-	src/hep_proto.c
+	src/hep_proto.c \
+	src/hep_transport.c
 
 libhep_la_CPPFLAGS = -I$(top_srcdir)/include
 libhep_la_CFLAGS = $(ZLIB_CFLAGS) -Wall
