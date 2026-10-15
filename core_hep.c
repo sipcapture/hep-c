@@ -56,8 +56,13 @@
 
 #include "core_hep.h"
 
-pthread_t call_thread;   
+pthread_t call_thread;
 pthread_mutex_t lock;
+
+static int hep_auth_key_active(void)
+{
+	return capt_password != NULL && capt_password[0] != '\0';
+}
 
 #ifdef USE_ZLIB
 z_stream strm;
@@ -229,11 +234,9 @@ static int pack_hepv3(rc_info_t *rcinfo, unsigned char *data, unsigned int len, 
     
     tlen = sizeof(struct hep_generic) + len + iplen + sizeof(hep_chunk_t);
 
-    /* auth key */
-    if(capt_password != NULL) {
-
+    /* auth key (only when TLS is enabled — see send_data) */
+    if (hep_auth_key_active() && usessl) {
           tlen += sizeof(hep_chunk_t);
-          /* Auth key */
           authkey_chunk.vendor_id = htons(0x0000);
           authkey_chunk.type_id   = htons(0x000e);
           authkey_chunk.length    = htons(sizeof(authkey_chunk) + strlen(capt_password));
@@ -277,17 +280,13 @@ static int pack_hepv3(rc_info_t *rcinfo, unsigned char *data, unsigned int len, 
 #endif
 
     /* AUTH KEY CHUNK */
-    if(capt_password != NULL) {
-        if (usessl) {
-            memcpy((void*) buffer+buflen, &authkey_chunk,  sizeof(struct hep_chunk));
-            buflen += sizeof(struct hep_chunk);
-
-            /* Now copying payload self */
-            memcpy((void*) buffer+buflen, capt_password, strlen(capt_password));
-            buflen+=strlen(capt_password);
-        } else {
-            HEP_LOG_WARNING("capt_password is configured but SSL is disabled; skipping AUTH KEY CHUNK to avoid cleartext transmission");
-        }
+    if (hep_auth_key_active() && usessl) {
+        memcpy((void*) buffer+buflen, &authkey_chunk,  sizeof(struct hep_chunk));
+        buflen += sizeof(struct hep_chunk);
+        memcpy((void*) buffer+buflen, capt_password, strlen(capt_password));
+        buflen += strlen(capt_password);
+    } else if (hep_auth_key_active() && !usessl) {
+        HEP_LOG_WARNING("auth_key configured but TLS disabled; auth chunk omitted");
     }
 
     /* PAYLOAD CHUNK */
@@ -472,49 +471,59 @@ error:
 
 int hep_send_buffer(const void *buf, unsigned int len)
 {
-    void *user_data;
-    const hep_io_hooks_t *hooks = hep_get_io_hooks(&user_data);
+	void *user_data;
+	const hep_io_hooks_t *hooks = hep_get_io_hooks(&user_data);
 
-    if (hooks && hooks->send)
-        return hooks->send(user_data, buf, len);
+	if (hooks && hooks->send) {
+		if (hep_auth_key_active() && !hooks->transport_encrypted) {
+			HEP_LOG_ERR("auth_key configured: I/O hook must set transport_encrypted");
+			return -1;
+		}
+		return hooks->send(user_data, buf, len);
+	}
 
-    return send_data((void *)buf, len);
+	return send_data((void *)buf, len);
+}
+
+static int hep_send_plain_socket(void *buf, unsigned int len)
+{
+	if (send(sock, buf, len, 0) == -1) {
+		HEP_LOG_ERR("send error");
+		return -1;
+	}
+	sendPacketsCount++;
+	return 0;
 }
 
 int send_data(void *buf, unsigned int len)
 {
-	void *p = buf;
-
-	if (!usessl) {
-		if (send(sock, p, len, 0) == -1) {
-			HEP_LOG_ERR("send error");
+	if (hep_auth_key_active()) {
+#ifdef USE_SSL
+		if (!usessl) {
+			HEP_LOG_ERR("auth_key configured but TLS is disabled");
 			return -1;
 		}
-          	sendPacketsCount++;
-	  /* while (sentbytes < len){
-	        	if( (r = send(sock, p, len - sentbytes, MSG_NOSIGNAL )) == -1) {
-	    	        	printf("send error\n");
-        			return -1;
-	        	}
-	        	if (r != len - sentbytes)
-			    printf("send:multiple calls: %d\n", r);
+		if (SSL_write(ssl, buf, len) < 0) {
+			HEP_LOG_ERR("capture: couldn't write ssl socket");
+			return -1;
+		}
+		sendPacketsCount++;
+		return 0;
+#else
+		HEP_LOG_ERR("auth_key configured but libhep was built without OpenSSL");
+		return -1;
+#endif
+	}
 
-        		sentbytes += r;
-	        	p += r;
-        	}
-        	sendPacketsCount++;
-	  */
-        }
+	if (!usessl)
+		return hep_send_plain_socket(buf, len);
 #ifdef USE_SSL
-        else {
-            if (SSL_write(ssl, buf, len) < 0) {
-                HEP_LOG_ERR("capture: couldn't write ssl socket");
-                return -1;
-            }
-	    sendPacketsCount++;
-        }
-#endif        
-	/* RESET ERRORS COUNTER */
+	if (SSL_write(ssl, buf, len) < 0) {
+		HEP_LOG_ERR("capture: couldn't write ssl socket");
+		return -1;
+	}
+	sendPacketsCount++;
+#endif
 	return 0;
 }
 
