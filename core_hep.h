@@ -25,7 +25,7 @@
  *
 */
 
-#define USE_IPV6
+#include "hep/hep_portability.h"
 
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
