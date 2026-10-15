@@ -14,5 +14,28 @@ HEP/EEP is currently supported natively in platforms such as Kamailio/SER, OpenS
 
 This repository provides some example reference implementations for Developers and Integrators.
 
+## Building
+
+Autotools (shared library with SONAME):
+
+```bash
+./autogen.sh
+./configure
+make
+sudo make install
+```
+
+CMake (alternative):
+
+```bash
+cmake -B build && cmake --build build
+```
+
+Public headers live under `include/hep/`. Configure capture settings with
+`hep_configure()` (no XML/xmlread). Optional `hep_set_io_hooks()` integrates
+with an external event loop; `hep_set_log_callback()` replaces stderr logging.
+
+See [docs/TRANSPORT.md](docs/TRANSPORT.md) for TLS/WS/WSS `ip_proto` values.
+
 For any question or comment, please visit http://sipcapture.org or contact support@sipcapture.org
 
