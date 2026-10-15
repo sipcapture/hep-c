@@ -29,6 +29,7 @@
 #include "hep/hep_io.h"
 #include "hep/hep_log.h"
 #include "hep/hep_portability.h"
+#include "hep/hep_transport.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -134,6 +135,7 @@ static int pack_hepv3(rc_info_t *rcinfo, unsigned char *data, unsigned int len, 
     hep_chunk_t payload_chunk;
     hep_chunk_t authkey_chunk;
     static int errors = 0;
+    unsigned int send_flags = 0;
 
     hg = malloc(sizeof(struct hep_generic));
     memset(hg, 0, sizeof(struct hep_generic));
@@ -281,6 +283,7 @@ static int pack_hepv3(rc_info_t *rcinfo, unsigned char *data, unsigned int len, 
 
     /* AUTH KEY CHUNK */
     if (hep_auth_key_active() && usessl) {
+        send_flags |= HEP_SEND_AUTH_CHUNK;
         memcpy((void*) buffer+buflen, &authkey_chunk,  sizeof(struct hep_chunk));
         buflen += sizeof(struct hep_chunk);
         memcpy((void*) buffer+buflen, capt_password, strlen(capt_password));
@@ -322,7 +325,7 @@ static int pack_hepv3(rc_info_t *rcinfo, unsigned char *data, unsigned int len, 
         buffer = NULL;
     } else {
         /* send this packet out of our socket */
-        if (send_data(buffer, buflen))
+        if (send_data(buffer, buflen, send_flags))
             errors++;
     }
 
@@ -454,8 +457,8 @@ int send_hepv2 (rc_info_t *rcinfo, unsigned char *data, unsigned int len) {
      }
 
      /* send this packet out of our socket */
-     if(send_data(buffer, buflen)) {
-             errors++;    
+     if (send_data(buffer, buflen, 0)) {
+             errors++;
      }
 
      /* FREE */
@@ -482,49 +485,32 @@ int hep_send_buffer(const void *buf, unsigned int len)
 		return hooks->send(user_data, buf, len);
 	}
 
-	return send_data((void *)buf, len);
+	if (hep_auth_key_active())
+		return send_data((void *)buf, len, HEP_SEND_AUTH_CHUNK);
+
+	return send_data((void *)buf, len, 0);
 }
 
-static int hep_send_plain_socket(void *buf, unsigned int len)
+int send_data(void *buf, unsigned int len, unsigned int send_flags)
 {
-	if (send(sock, buf, len, 0) == -1) {
-		HEP_LOG_ERR("send error");
-		return -1;
-	}
-	sendPacketsCount++;
-	return 0;
-}
+	int rc;
 
-int send_data(void *buf, unsigned int len)
-{
-	if (hep_auth_key_active()) {
-#ifdef USE_SSL
+	if ((send_flags & HEP_SEND_AUTH_CHUNK) || hep_auth_key_active()) {
 		if (!usessl) {
 			HEP_LOG_ERR("auth_key configured but TLS is disabled");
 			return -1;
 		}
-		if (SSL_write(ssl, buf, len) < 0) {
-			HEP_LOG_ERR("capture: couldn't write ssl socket");
-			return -1;
-		}
-		sendPacketsCount++;
-		return 0;
-#else
-		HEP_LOG_ERR("auth_key configured but libhep was built without OpenSSL");
-		return -1;
-#endif
+		rc = hep_socket_send_tls(buf, len);
+	} else if (!usessl) {
+		rc = hep_socket_send_plain(buf, len);
+	} else {
+		rc = hep_socket_send_tls(buf, len);
 	}
 
-	if (!usessl)
-		return hep_send_plain_socket(buf, len);
-#ifdef USE_SSL
-	if (SSL_write(ssl, buf, len) < 0) {
-		HEP_LOG_ERR("capture: couldn't write ssl socket");
-		return -1;
-	}
-	sendPacketsCount++;
-#endif
-	return 0;
+	if (rc == 0)
+		sendPacketsCount++;
+
+	return rc;
 }
 
 

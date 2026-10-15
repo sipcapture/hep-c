@@ -9,6 +9,7 @@ add_library(hep SHARED
   src/hep_io.c
   src/hep_config.c
   src/hep_proto.c
+  src/hep_transport.c
 )
 
 target_include_directories(hep
