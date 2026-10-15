@@ -56,7 +56,7 @@
 
 #include <pcap.h>
 
-#include "src/api.h"
+#include "api.h"
 #include "core_hep.h"
 
 pthread_t call_thread;   
