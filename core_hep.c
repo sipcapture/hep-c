@@ -278,13 +278,16 @@ static int pack_hepv3(rc_info_t *rcinfo, unsigned char *data, unsigned int len, 
 
     /* AUTH KEY CHUNK */
     if(capt_password != NULL) {
+        if (usessl) {
+            memcpy((void*) buffer+buflen, &authkey_chunk,  sizeof(struct hep_chunk));
+            buflen += sizeof(struct hep_chunk);
 
-        memcpy((void*) buffer+buflen, &authkey_chunk,  sizeof(struct hep_chunk));
-        buflen += sizeof(struct hep_chunk);
-
-        /* Now copying payload self */
-        memcpy((void*) buffer+buflen, capt_password, strlen(capt_password));
-        buflen+=strlen(capt_password);
+            /* Now copying payload self */
+            memcpy((void*) buffer+buflen, capt_password, strlen(capt_password));
+            buflen+=strlen(capt_password);
+        } else {
+            HEP_LOG_WARNING("capt_password is configured but SSL is disabled; skipping AUTH KEY CHUNK to avoid cleartext transmission");
+        }
     }
 
     /* PAYLOAD CHUNK */
