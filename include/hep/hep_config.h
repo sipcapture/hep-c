@@ -9,6 +9,7 @@ typedef struct hep_capture_config {
 	const char *port;
 	/* "udp", "tcp", "tls", "sctp", "ws", "wss" — see hep_proto.h */
 	const char *transport;
+	/* Requires use_ssl=1 (built-in transport) or encrypted I/O hooks. */
 	const char *auth_key;
 	int capture_id;
 	int hep_version;

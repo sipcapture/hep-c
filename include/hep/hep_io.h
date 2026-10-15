@@ -14,6 +14,11 @@ typedef struct hep_io_hooks {
 	int (*send)(void *user_data, const void *buffer, unsigned int length);
 	/* Optional: called after repeated send failures (reconnect). */
 	int (*reconnect)(void *user_data);
+	/*
+	 * Set to 1 when send() transmits over TLS (or equivalent). Required when
+	 * hep_configure() supplies an auth_key — cleartext hooks are rejected.
+	 */
+	unsigned int transport_encrypted;
 } hep_io_hooks_t;
 
 void hep_set_io_hooks(const hep_io_hooks_t *hooks, void *user_data);

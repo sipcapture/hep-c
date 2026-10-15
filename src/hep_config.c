@@ -1,4 +1,5 @@
 #include "hep/hep_config.h"
+#include "hep/hep_log.h"
 
 #include <netdb.h>
 #include <string.h>
@@ -33,6 +34,18 @@ int hep_configure(const hep_capture_config_t *config)
 		hep_version = config->hep_version;
 	pl_compress = config->compress_payload ? 1 : 0;
 	usessl = config->use_ssl ? 1 : 0;
+
+	if (capt_password && capt_password[0] != '\0') {
+#ifdef USE_SSL
+		if (!usessl) {
+			HEP_LOG_WARNING("auth_key set: enabling TLS for HEP transport");
+			usessl = 1;
+		}
+#else
+		HEP_LOG_ERR("auth_key requires libhep built with OpenSSL (USE_SSL)");
+		return -1;
+#endif
+	}
 
 	memset(hints, 0, sizeof(hints[0]));
 	if (capt_proto && !strcmp(capt_proto, "udp"))
