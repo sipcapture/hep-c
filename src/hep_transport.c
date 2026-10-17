@@ -16,10 +16,12 @@ extern SSL *ssl;
 int hep_socket_send_plain(const void *buf, unsigned int len)
 {
 	/*
-	 * HEP auth-key (chunk 0x000e) is only transmitted via hep_socket_send_tls().
-	 * send_data() never calls this function when HEP_SEND_AUTH_CHUNK is set.
+	 * Cleartext transport.  The HEP auth-key chunk (0x000e) is a shared
+	 * secret and is never assembled into the buffers handled here; see
+	 * pack_hepv3() in core_hep.c and hep_socket_send_tls() below.  Buffers
+	 * built with an auth key are only ever written via the TLS transport.
 	 */
-	if (send(sock, buf, len, 0) == -1) { /* lgtm[cpp/cleartext-transmission] */
+	if (send(sock, buf, len, 0) == -1) {
 		HEP_LOG_ERR("send error");
 		return -1;
 	}
