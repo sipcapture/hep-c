@@ -26,4 +26,11 @@ hepinclude_HEADERS = \
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libhep.pc
 
+check_PROGRAMS = tests/test_hep_auth_transport
+TESTS = $(check_PROGRAMS)
+
+tests_test_hep_auth_transport_SOURCES = tests/test_hep_auth_transport.c
+tests_test_hep_auth_transport_CPPFLAGS = -I$(top_srcdir)/include
+tests_test_hep_auth_transport_LDADD = libhep.la
+
 EXTRA_DIST = core_hep.h docs/TRANSPORT.md

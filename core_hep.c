@@ -135,7 +135,10 @@ static int pack_hepv3(rc_info_t *rcinfo, unsigned char *data, unsigned int len, 
     hep_chunk_t payload_chunk;
     hep_chunk_t authkey_chunk;
     static int errors = 0;
-    unsigned int send_flags = 0;
+    unsigned char *full = NULL;
+    unsigned int auth_chunk_len = 0;
+    unsigned int auth_offset = 0;
+    unsigned int base_len = 0;
 
     hg = malloc(sizeof(struct hep_generic));
     memset(hg, 0, sizeof(struct hep_generic));
@@ -234,15 +237,26 @@ static int pack_hepv3(rc_info_t *rcinfo, unsigned char *data, unsigned int len, 
     payload_chunk.type_id   = sendzip ? htons(0x0010) : htons(0x000f);
     payload_chunk.length    = htons(sizeof(payload_chunk) + len);
     
-    tlen = sizeof(struct hep_generic) + len + iplen + sizeof(hep_chunk_t);
+    /* Length of the packet without the optional auth-key chunk. */
+    base_len = sizeof(struct hep_generic) + len + iplen + sizeof(hep_chunk_t);
+    tlen = base_len;
 
-    /* auth key (only when TLS is enabled — see send_data) */
-    if (hep_auth_key_active() && usessl) {
-          tlen += sizeof(hep_chunk_t);
-          authkey_chunk.vendor_id = htons(0x0000);
-          authkey_chunk.type_id   = htons(0x000e);
-          authkey_chunk.length    = htons(sizeof(authkey_chunk) + strlen(capt_password));
-          tlen += strlen(capt_password);
+    /*
+     * HEP auth-key chunk (0x000e).  It carries a shared secret, so it is kept
+     * out of the packet buffer that the cleartext transport can write.  It is
+     * appended only into a dedicated buffer that is handed to the TLS
+     * transport (or to an embedder via hep_build_packet()).
+     */
+    if (hep_auth_key_active()) {
+        if (!usessl) {
+            HEP_LOG_WARNING("auth_key configured but TLS disabled; auth chunk omitted");
+        } else {
+            authkey_chunk.vendor_id = htons(0x0000);
+            authkey_chunk.type_id   = htons(0x000e);
+            authkey_chunk.length    = htons(sizeof(authkey_chunk) + strlen(capt_password));
+            auth_chunk_len = (unsigned int)(sizeof(hep_chunk_t) + strlen(capt_password));
+            tlen += auth_chunk_len;
+        }
     }
 
     /* total */
@@ -250,7 +264,7 @@ static int pack_hepv3(rc_info_t *rcinfo, unsigned char *data, unsigned int len, 
 
     //HEP_LOG_ERR( "LEN: [%d] vs [%d] = IPLEN:[%d] LEN:[%d] CH:[%d]\n", hg->header.length, ntohs(hg->header.length), iplen, len, sizeof(struct hep_chunk));
 
-    buffer = (void*)malloc(tlen);
+    buffer = (void*)malloc(base_len);
     if (buffer==0){
         HEP_LOG_ERR("out of memory");
         free(hg);
@@ -281,16 +295,12 @@ static int pack_hepv3(rc_info_t *rcinfo, unsigned char *data, unsigned int len, 
     }
 #endif
 
-    /* AUTH KEY CHUNK */
-    if (hep_auth_key_active() && usessl) {
-        send_flags |= HEP_SEND_AUTH_CHUNK;
-        memcpy((void*) buffer+buflen, &authkey_chunk,  sizeof(struct hep_chunk));
-        buflen += sizeof(struct hep_chunk);
-        memcpy((void*) buffer+buflen, capt_password, strlen(capt_password));
-        buflen += strlen(capt_password);
-    } else if (hep_auth_key_active() && !usessl) {
-        HEP_LOG_WARNING("auth_key configured but TLS disabled; auth chunk omitted");
-    }
+    /*
+     * The auth-key chunk is not part of the packet buffer.  Remember where it
+     * belongs on the wire so it can be inserted only when transmitting over
+     * TLS or assembling the packet for an embedder.
+     */
+    auth_offset = buflen;
 
     /* PAYLOAD CHUNK */
     memcpy((void*) buffer+buflen, &payload_chunk,  sizeof(struct hep_chunk));
@@ -319,19 +329,57 @@ static int pack_hepv3(rc_info_t *rcinfo, unsigned char *data, unsigned int len, 
 #endif /* USE SSL */
     }
 
+    /*
+     * If the packet carries the HEP auth-key, assemble the complete on-wire
+     * packet in a dedicated buffer.  That buffer only ever goes to the TLS
+     * transport or back to an embedder; the cleartext transport never sees
+     * the secret.
+     */
+    if (auth_chunk_len) {
+        full = (unsigned char *)malloc(tlen);
+        if (full == NULL) {
+            HEP_LOG_ERR("out of memory");
+            free(buffer);
+            free(hg);
+            return 1;
+        }
+        memcpy(full, buffer, auth_offset);
+        memcpy(full + auth_offset, &authkey_chunk, sizeof(hep_chunk_t));
+        memcpy(full + auth_offset + sizeof(hep_chunk_t), capt_password,
+               strlen(capt_password));
+        memcpy(full + auth_offset + auth_chunk_len,
+               (unsigned char *)buffer + auth_offset, buflen - auth_offset);
+    }
+
     if (!deliver && out_buf && out_len) {
-        *out_buf = (unsigned char *)buffer;
-        *out_len = buflen;
-        buffer = NULL;
+        if (full) {
+            free(buffer);
+            buffer = NULL;
+            *out_buf = full;
+            *out_len = tlen;
+            full = NULL;
+        } else {
+            *out_buf = (unsigned char *)buffer;
+            *out_len = buflen;
+            buffer = NULL;
+        }
+    } else if (full) {
+        /* Packets carrying the auth-key are written over TLS only. */
+        if (hep_socket_send_tls(full, tlen))
+            errors++;
+        else
+            sendPacketsCount++;
     } else {
         /* send this packet out of our socket */
-        if (send_data(buffer, buflen, send_flags))
+        if (send_data(buffer, buflen, 0))
             errors++;
     }
 
     /* FREE */
     if (buffer)
         free(buffer);
+    if (full)
+        free(full);
     if (hg)
         free(hg);
 
